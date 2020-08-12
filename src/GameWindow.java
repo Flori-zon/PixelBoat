@@ -11,8 +11,7 @@ public class GameWindow extends JFrame implements WindowListener {
 
     private boolean running;
     private Updater updater;
-    private EngineScreen canvas;
-
+    private EngineScreen screen;
 
     private class Updater extends Thread {
         @Override
@@ -49,12 +48,20 @@ public class GameWindow extends JFrame implements WindowListener {
 
         setTitle("Pixel Boat");
 
-        canvas = new MenuScreen(this);
-        add(canvas);
+        Dimension size = new Dimension(1000, 1000);
+        setMinimumSize(size);
+        setMaximumSize(size);
+        setPreferredSize(size);
+        setSize(size);
+        setLocationRelativeTo(null);
+        setResizable(false);
 
         addWindowListener(this);
+
+        screen = new ImageRotationTestScreen(this);
+        add(screen);
+
         setVisible(true);
-        pack();
 
         running = true;
         updater = new Updater();
@@ -62,20 +69,20 @@ public class GameWindow extends JFrame implements WindowListener {
     }
 
     private void tick() {
-        canvas.tick();
+        screen.tick();
     }
 
     private void render() {
-        BufferStrategy bs = canvas.getBufferStrategy();
+        BufferStrategy bs = screen.getBufferStrategy();
         if (bs == null) {
-            canvas.createBufferStrategy(2);
-            bs = canvas.getBufferStrategy();
+            screen.createBufferStrategy(2);
+            bs = screen.getBufferStrategy();
         }
         Graphics graphics = bs.getDrawGraphics();
 
-        canvas.newGraphics(graphics);
-        canvas.resize();
-        canvas.render();
+        screen.newGraphics(graphics);
+        screen.resize();
+        screen.render();
 
         graphics.dispose();
         bs.show();
@@ -88,9 +95,9 @@ public class GameWindow extends JFrame implements WindowListener {
         } catch (InterruptedException ex) {
             ex.printStackTrace();
         }
-        remove(canvas);
+        remove(screen);
 
-        canvas = engineScreen;
+        screen = engineScreen;
         add(engineScreen);
 
         running = true;

@@ -10,26 +10,30 @@ abstract class View {
     final View host;
     int id;
 
-    int x1, y1, x2, y2;
+    int x, y, height, width;
     boolean visible;
     boolean hover, hold;
     ViewListener[] listeners;
     View[] views;
 
-    public View(UIScreen screen, View host, int x1, int y1, int x2, int y2) {
+    public View(UIScreen screen, View host, int x, int y, int width, int height) {
         this.screen = screen;
         this.host = host;
-        setPosition(x1, y1, x2, y2);
+        reposition(x, y);
+        resize(width, height);
         this.visible = true;
         this.listeners = new ViewListener[0];
         this.views = new View[0];
     }
 
-    public void setPosition(int x1, int y1, int x2, int y2) {
-        this.x1 = x1;
-        this.y1 = y1;
-        this.x2 = x2;
-        this.y2 = y2;
+    public void reposition(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public void resize(int width, int height) {
+        this.width = width;
+        this.height = height;
     }
 
    /*
@@ -77,7 +81,7 @@ abstract class View {
         boolean viewsHover = false;
         for (View view : views)
             viewsHover = view.checkHover(m) || viewsHover;
-        boolean thisHover = !viewsHover && visible && m != null && m.x >= x1 && m.x <= x2 && m.y >= y1 && m.y <= y2;
+        boolean thisHover = !viewsHover && visible && m != null && m.x >= x && m.x <= x + width && m.y >= y && m.y <= y + height;
         if (thisHover != hover) {
             hover = thisHover;
             for (ViewListener listener : listeners)
@@ -139,7 +143,7 @@ interface ViewListener {
 abstract class FrameView extends View {
 
     Color
-            bgColor,
+            bodyColor,
             frameColor;
 
     public FrameView(
@@ -147,12 +151,12 @@ abstract class FrameView extends View {
             Color bgColor, Color frameColor
     ) {
         super(screen, host, x, y, x2, y2);
-        setBgColor(bgColor);
+        setBodyColor(bgColor);
         setFrameColor(frameColor);
     }
 
-    public void setBgColor(Color bgColor) {
-        this.bgColor = bgColor;
+    public void setBodyColor(Color bodyColor) {
+        this.bodyColor = bodyColor;
     }
 
     public void setFrameColor(Color frameColor) {
@@ -162,16 +166,16 @@ abstract class FrameView extends View {
     @Override
     void drawThis() {
         screen.setColor(Color.GRAY);
-        screen.fillRect(x1, y1, x2, y2);
+        screen.fillRect(x, y, width, height);
         screen.setColor(Color.DARK_GRAY);
-        screen.drawRect(x1, y1, x2, y2);
+        screen.drawRect(x, y, width, height);
     }
 }
 
 class ImageView extends FrameView {
 
     File imgFile;
-    int imgId;
+    EngineScreen.Image image;
 
     public ImageView(
             UIScreen screen, View host, int x1, int y1, int x2, int y2,
@@ -179,32 +183,24 @@ class ImageView extends FrameView {
             File imgFile
     ) {
         super(screen, host, x1, y1, x2, y2, bgColor, frameColor);
-        this.imgId = -1;
         setImage(imgFile);
     }
 
     public void setImage(File imgFile) {
         this.imgFile = imgFile;
-        screen.readImage(imgFile);
-        if (imgId == -1)
-            imgId = screen.storeImage();
-        else
-            screen.storeImage(imgId);
-        screen.scaleImage(x2 - x1 - 2, y2 - y1 - 2);
-        screen.storeImage(imgId);
+        image = screen.resizeImage(screen.readImage(imgFile), width - 4, height - 4);
     }
 
     @Override
-    public void setPosition(int x1, int y1, int x2, int y2) {
-        super.setPosition(x1, y1, x2, y2);
+    public void resize(int x, int y) {
+        super.reposition(x, y);
         if (imgFile != null) setImage(imgFile);
     }
 
     @Override
     void drawThis() {
         super.drawThis();
-        screen.setImage(imgId);
-        screen.drawImage(x1 + 1, y1 + 1);
+        screen.drawImage(image, x + 2, y + 2);
     }
 
 }
@@ -228,15 +224,15 @@ class TextView extends FrameView {
     }
 
     @Override
-    public void setPosition(int x1, int y1, int x2, int y2) {
-        super.setPosition(x1, y1, x2, y2);
-        textSize = x2 - x1 - 4;
+    public void resize(int x, int y) {
+        super.reposition(x, y);
+        textSize = height - 4;
     }
 
     @Override
     void drawThis() {
         super.drawThis();
-        screen.drawSizedString(x1 + 2, y1 + 2, textSize, text);
+        screen.drawSizedString(x + 2, y + 2, textSize, text);
     }
 
 }
