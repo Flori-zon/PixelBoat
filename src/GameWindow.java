@@ -48,7 +48,7 @@ public class GameWindow extends JFrame implements WindowListener {
 
         setTitle("Pixel Boat");
 
-        Dimension size = new Dimension(1000, 1000);
+        Dimension size = new Dimension(800, 400);
         setMinimumSize(size);
         setMaximumSize(size);
         setPreferredSize(size);

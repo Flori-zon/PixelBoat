@@ -8,33 +8,21 @@ public class ImageRotationTestScreen extends EngineScreen {
 
     ImageRotationTestScreen(GameWindow window) {
         super(window);
-
-        Dimension size = new Dimension(1000, 1000);
-        window.setMinimumSize(size);
-        window.setMaximumSize(size);
-        window.setPreferredSize(size);
-        window.setSize(size);
-        window.setLocationRelativeTo(null);
-        window.setResizable(false);
-
-        pixelate(500, 500);
-        image = scaleImage(readImage(new File("C:/Users/Admin/IdeaProjects/PixelBoat/resources/image.png")), 100, 100);
+        pixelate(400, 200);
+        image = scaleImage(readImage(new File("C:/Users/flo81/IdeaProjects/PixelBoat/resources/image.png")), 15, 15);
     }
 
     @Override
     public void tick() {
-        rotation += 0.001 * Math.PI;
+        rotation += 0.0005 * Math.PI;
         if (rotation > Math.PI) rotation -= Math.PI;
     }
 
     @Override
     public void render() {
-        setColor(Color.LIGHT_GRAY);
+        setColor(Color.WHITE);
         fill();
-        drawImage(
-                resizeImage(
-                        rotateImage(image, -2 * rotation)
-                        , 500, 500)
-                , 0, 0);
+        drawImage(scaleImage(rotateImage(image, -2 * rotation),2,2), 199 , 0);
+
     }
 }

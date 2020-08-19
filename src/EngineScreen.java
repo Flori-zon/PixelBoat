@@ -3,17 +3,15 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 
 @SuppressWarnings("unused")
 public abstract class EngineScreen extends Canvas {
 
     protected int
-            screenPixelWidth,
-            screenPixelHeight,
             screenWidth,
-            screenHeight;
+            screenHeight,
+            screenPixelWidth,
+            screenPixelHeight;
     protected float
             pixelWidth,
             pixelHeight;
@@ -21,12 +19,15 @@ public abstract class EngineScreen extends Canvas {
             pixelWidthInt,
             pixelHeightInt;
 
+    private int antialias;
+
     protected final GameWindow window;
 
     private Graphics graphics;
 
     public EngineScreen(GameWindow window) {
         this.window = window;
+        this.antialias = 3;
         pixelate(window.getWidth(), window.getHeight());
     }
 
@@ -45,15 +46,21 @@ public abstract class EngineScreen extends Canvas {
     public void pixelate(int screenPixelWidth, int screenPixelHeight) {
         this.screenPixelWidth = screenPixelWidth;
         this.screenPixelHeight = screenPixelHeight;
-        resize();
+        ratio();
     }
 
     public void resize() {
         Dimension windowDimension = window.getContentPane().getSize();
-        this.screenWidth = windowDimension.width;
-        this.screenHeight = windowDimension.height;
-        this.pixelWidth = (float) windowDimension.width / (float) screenPixelWidth;
-        this.pixelHeight = (float) windowDimension.height / (float) screenPixelHeight;
+        if (windowDimension.width != screenWidth || windowDimension.height != screenHeight) {
+            this.screenWidth = windowDimension.width;
+            this.screenHeight = windowDimension.height;
+            ratio();
+        }
+    }
+
+    private void ratio() {
+        this.pixelWidth = (float) screenWidth / (float) screenPixelWidth;
+        this.pixelHeight = (float) screenHeight / (float) screenPixelHeight;
         this.pixelWidthInt = (int) Math.ceil(pixelWidth);
         this.pixelHeightInt = (int) Math.ceil(pixelHeight);
     }
@@ -61,17 +68,36 @@ public abstract class EngineScreen extends Canvas {
     //image drawing
 
     static class Image {
-        int
-                width, height;
-        byte[][] a, r, g, b;
+        boolean hasAlpha;
+        int width, height;
+        int[][] pixels;
 
         Image(int width, int height) {
             this.width = width;
             this.height = height;
-            a = new byte[width][height];
-            r = new byte[width][height];
-            g = new byte[width][height];
-            b = new byte[width][height];
+            this.pixels = new int[width][height];
+        }
+    }
+
+    static class Vector {
+
+        float x, y;
+
+        Vector(float x, float y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        Vector add(Vector p) {
+            return new Vector(x + p.x, y + p.y);
+        }
+
+        Vector remove(Vector p) {
+            return new Vector(x - p.x, y - p.y);
+        }
+
+        Vector divide(float d) {
+            return new Vector(x / d, y / d);
         }
     }
 
@@ -84,68 +110,101 @@ public abstract class EngineScreen extends Canvas {
             return null;
         }
         Image image = new Image(bi.getWidth(), bi.getHeight());
-        boolean hasAlpha = bi.getAlphaRaster() != null;
-        Color ic;
+        image.hasAlpha = bi.getAlphaRaster() != null;
         for (int iy = 0; iy < image.height; iy++)
             for (int ix = 0; ix < image.width; ix++) {
-                ic = new Color(bi.getRGB(ix, iy), hasAlpha);
-                image.a[ix][iy] = (byte) (ic.getAlpha() - 128);
-                image.r[ix][iy] = (byte) (ic.getRed() - 128);
-                image.g[ix][iy] = (byte) (ic.getGreen() - 128);
-                image.b[ix][iy] = (byte) (ic.getBlue() - 128);
+                image.pixels[ix][iy] = (bi.getRGB(ix, iy));
             }
         return image;
     }
 
+    //TODO
     public Image rotateImage(Image image, float rotPi) {
-        int
-                maxX = image.width - 1,
-                maxY = image.height - 1;
-        Point[] corners = new Point[]{
-                rotatePoint(0, 0, rotPi),
-                rotatePoint(0, maxY, rotPi),
-                rotatePoint(maxX, 0, rotPi),
-                rotatePoint(maxX, maxY, rotPi)
+
+        int endX = image.width - 1, endY = image.height - 1;
+        //rotated corners
+        Vector[] corners = new Vector[]{
+                rotateVector(0, 0, rotPi),
+                rotateVector(0, endY, rotPi),
+                rotateVector(endX, 0, rotPi),
+                rotateVector(endX, endY, rotPi)
         };
-        int
-                lx = Integer.MAX_VALUE, ly = Integer.MAX_VALUE,
-                hx = Integer.MIN_VALUE, hy = Integer.MIN_VALUE;
-        for (Point corner : corners) {
+        //rotated frame corners
+        float lx = 0, ly = 0, hx = 0, hy = 0;
+        for (Vector corner : corners) {
             if (corner.x < lx) lx = corner.x;
             if (corner.x > hx) hx = corner.x;
             if (corner.y < ly) ly = corner.y;
             if (corner.y > hy) hy = corner.y;
         }
-        Image rotatedImg = new Image(hx - lx, hy - ly);
-        rotPi *= -1;
-        Point op;
-        for (int iy = 0; iy < rotatedImg.height; iy++)
-            for (int ix = 0; ix < rotatedImg.width; ix++) {
-                op = rotatePoint(ix + lx, iy + ly, rotPi);
-                if (op.x < 0 || op.y < 0 || op.x > maxX || op.y > maxY) {
-                    rotatedImg.a[ix][iy] = Byte.MIN_VALUE;
-                    continue;
-                }
-                rotatedImg.a[ix][iy] = image.a[op.x][op.y];
-                rotatedImg.r[ix][iy] = image.r[op.x][op.y];
-                rotatedImg.g[ix][iy] = image.g[op.x][op.y];
-                rotatedImg.b[ix][iy] = image.b[op.x][op.y];
+        float rWidth = (float) Math.ceil(hx - lx), rHeight = (float) Math.ceil(hy - ly);
+        int rWidthInt = (int) rWidth, rHeightInt = (int) rHeight;
+        Image rotatedImg = new Image(rWidthInt, rHeightInt);
+        //reverse rotated frame corners
+        Vector v0 = rotateVector(lx-1, ly-1, -rotPi);
+        Vector v1 = rotateVector(hx+1, ly-1, -rotPi).remove(v0);
+        Vector v2 = rotateVector(lx-1, hy+1, -rotPi).remove(v0);
+
+        //DEBUG
+        Vector p0 = new Vector(99, 99);
+        setColor(Color.WHITE);
+        drawPixel((int) p0.x, (int) p0.y);
+        setColor(Color.RED);
+        drawRect((int) p0.x, (int) p0.y, image.width, image.height);
+        setColor(Color.BLUE);
+        drawLine((int) (p0.x + corners[0].x), (int) (p0.y + corners[0].y), (int) (p0.x + corners[1].x), (int) (p0.y + corners[1].y));
+        drawLine((int) (p0.x + corners[1].x), (int) (p0.y + corners[1].y), (int) (p0.x + corners[3].x), (int) (p0.y + corners[3].y));
+        drawLine((int) (p0.x + corners[3].x), (int) (p0.y + corners[3].y), (int) (p0.x + corners[2].x), (int) (p0.y + corners[2].y));
+        drawLine((int) (p0.x + corners[2].x), (int) (p0.y + corners[2].y), (int) (p0.x + corners[0].x), (int) (p0.y + corners[0].y));
+        setColor(Color.GREEN);
+        drawRect((int) (p0.x + lx), (int) (p0.y + ly), (int) (hx - lx), (int) (hy - ly));
+        setColor(Color.YELLOW);
+        drawLine((int) (p0.x + v0.x), (int) (p0.y + v0.y), (int) (p0.x + v0.x + v1.x), (int) (p0.y + v0.y + v1.y));
+        drawLine((int) (p0.x + v0.x), (int) (p0.y + v0.y), (int) (p0.x + v0.x + v2.x), (int) (p0.y + v0.y + v2.y));
+
+        //components for mapping from rotated frame to rev rotated-frame
+        Vector vx = v1.divide(rWidth), vy = v2.divide(rHeight);
+        //reverse mapping in subpixel steps
+        float sp = 1 / (float) antialias;
+        int aasq = antialias * antialias;
+        for (int ix = 0; ix < rWidth; ix++)
+            for (int iy = 0; iy < rHeight; iy++) {
+                int a = 0, r = 0, g = 0, b = 0;
+                for (int ispx = 0; ispx < antialias; ispx++)
+                    for (int ispy = 0; ispy < antialias; ispy++) {
+                        //position on rotated frame
+                        float px = ix + sp * ispx, py = iy + sp * ispy;
+                        //position on rev. rotated frame
+                        int qx = (int) (v0.x + vx.x * px + vy.x * py), qy = (int) (v0.y + vx.y * px + vy.y * py);
+                        if (qx < 0 || qy < 0 || qx > endX || qy > endY) continue;
+                        int pc = image.pixels[qx][qy];
+                        int ra = (pc & 0xff000000) >>> 24;
+                        a += ra;
+                        float pa = (float) ra / 255;
+                        r += (int) (((pc & 0x00ff0000) >> 16) * pa);
+                        g += (int) (((pc & 0x0000ff00) >> 8) * pa);
+                        b += (int) ((pc & 0x000000ff) * pa);
+                    }
+                a /= aasq;
+                r /= aasq;
+                g /= aasq;
+                b /= aasq;
+                rotatedImg.pixels[ix][iy] = ((a << 24) & 0xff000000) | ((r << 16) & 0x00ff0000) | ((g << 8) & 0x0000ff00) | (b & 0x000000ff);
             }
         return rotatedImg;
     }
 
-    private Point rotatePoint(int ox, int oy, float rotPi) {
+    private Vector rotateVector(float ox, float oy, float rotPi) {
         if (ox == 0 && oy == 0)
-            return new Point(ox, oy);
-        float dist = (float) Math.sqrt(Math.abs(Math.pow((float) ox, 2) + Math.pow((float) oy, 2)));
-        float angle = (float) Math.atan((double) (float) ox / (float) oy);
-        if ((float) oy < 0) angle += Math.PI;
+            return new Vector(0, 0);
+        double dist = Math.sqrt(Math.abs(Math.pow(ox, 2) + Math.pow(oy, 2)));
+        double angle = Math.atan(ox / oy);
+        if (oy < 0) angle += Math.PI;
         angle += rotPi;
-        return new Point(
-                (int) Math.round((Math.sin(angle) * dist)),
-                (int) Math.round((Math.cos(angle) * dist)));
+        return new Vector((float) (Math.sin(angle) * dist), (float) (Math.cos(angle) * dist));
     }
 
+    //TODO
     public Image resizeImage(Image image, int nWidth, int nHeight) {
         return scaleImage(image, (float) nWidth / image.width, (float) nHeight / image.height);
     }
@@ -159,22 +218,15 @@ public abstract class EngineScreen extends Canvas {
             for (int ix = 0; ix < scaled.width; ix++) {
                 tx = (int) (ix / sx);
                 ty = (int) (iy / sy);
-                scaled.a[ix][iy] = image.a[tx][ty];
-                scaled.r[ix][iy] = image.r[tx][ty];
-                scaled.g[ix][iy] = image.g[tx][ty];
-                scaled.b[ix][iy] = image.b[tx][ty];
+                scaled.pixels[ix][iy] = image.pixels[tx][ty];
             }
         return scaled;
     }
 
     public void drawImage(Image image, int x, int y) {
-        for (int iy = 0; iy < image.height; iy++)
-            for (int ix = 0; ix < image.width; ix++) {
-                setColor(new Color(
-                        image.r[ix][iy] + 128,
-                        image.g[ix][iy] + 128,
-                        image.b[ix][iy] + 128,
-                        image.a[ix][iy] + 128));
+        for (int ix = 0; ix < image.width; ix++)
+            for (int iy = 0; iy < image.height; iy++) {
+                setColor(new Color(image.pixels[ix][iy]));
                 drawPixel(x + ix, y + iy);
             }
     }
