@@ -1,68 +1,30 @@
-import javax.imageio.ImageIO;
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
 
-@SuppressWarnings("unused")
-public abstract class EngineScreen extends Canvas {
 
-    protected int
-            screenWidth,
-            screenHeight,
-            screenPixelWidth,
-            screenPixelHeight;
-    protected float
-            pixelWidth,
-            pixelHeight;
-    private int
-            pixelWidthInt,
-            pixelHeightInt;
+/*
+public abstract class oldPixelGraphics {
 
-    private int antialias;
+    int
+            width,
+            height,
+            widthPx,
+            heightPx;
+    float
+            pxWidth,
+            pxHeight;
+    int
+            pxWidthInt,
+            pxHeightInt;
+    int antialias = 3; //TODO
 
-    protected final GameWindow window;
+    public oldPixelGraphics(int pxWidth, int pxHeight) {
+        Rectangle bounds = getBounds();
+        this.width = bounds.width;
+        this.height = bounds.height;
 
-    private Graphics graphics;
-
-    public EngineScreen(GameWindow window) {
-        this.window = window;
-        this.antialias = 3;
-        pixelate(window.getWidth(), window.getHeight());
-    }
-
-    //override
-
-    public abstract void tick();
-
-    public abstract void render();
-
-    //pixel mechanism
-
-    public void newGraphics(Graphics graphics) {
-        this.graphics = graphics;
-    }
-
-    public void pixelate(int screenPixelWidth, int screenPixelHeight) {
-        this.screenPixelWidth = screenPixelWidth;
-        this.screenPixelHeight = screenPixelHeight;
-        ratio();
-    }
-
-    public void resize() {
-        Dimension windowDimension = window.getContentPane().getSize();
-        if (windowDimension.width != screenWidth || windowDimension.height != screenHeight) {
-            this.screenWidth = windowDimension.width;
-            this.screenHeight = windowDimension.height;
-            ratio();
-        }
-    }
-
-    private void ratio() {
-        this.pixelWidth = (float) screenWidth / (float) screenPixelWidth;
-        this.pixelHeight = (float) screenHeight / (float) screenPixelHeight;
-        this.pixelWidthInt = (int) Math.ceil(pixelWidth);
-        this.pixelHeightInt = (int) Math.ceil(pixelHeight);
+        this.pxWidth = (float) width / (float) widthPx;
+        this.pxHeight = (float) height / (float) heightPx;
+        this.pxWidthInt = (int) Math.ceil(pxWidth);
+        this.pxHeightInt = (int) Math.ceil(pxHeight);
     }
 
     //image drawing
@@ -145,23 +107,6 @@ public abstract class EngineScreen extends Canvas {
         Vector v1 = rotateVector(hx+1, ly-1, -rotPi).remove(v0);
         Vector v2 = rotateVector(lx-1, hy+1, -rotPi).remove(v0);
 
-        //DEBUG
-        Vector p0 = new Vector(99, 99);
-        setColor(Color.WHITE);
-        drawPixel((int) p0.x, (int) p0.y);
-        setColor(Color.RED);
-        drawRect((int) p0.x, (int) p0.y, image.width, image.height);
-        setColor(Color.BLUE);
-        drawLine((int) (p0.x + corners[0].x), (int) (p0.y + corners[0].y), (int) (p0.x + corners[1].x), (int) (p0.y + corners[1].y));
-        drawLine((int) (p0.x + corners[1].x), (int) (p0.y + corners[1].y), (int) (p0.x + corners[3].x), (int) (p0.y + corners[3].y));
-        drawLine((int) (p0.x + corners[3].x), (int) (p0.y + corners[3].y), (int) (p0.x + corners[2].x), (int) (p0.y + corners[2].y));
-        drawLine((int) (p0.x + corners[2].x), (int) (p0.y + corners[2].y), (int) (p0.x + corners[0].x), (int) (p0.y + corners[0].y));
-        setColor(Color.GREEN);
-        drawRect((int) (p0.x + lx), (int) (p0.y + ly), (int) (hx - lx), (int) (hy - ly));
-        setColor(Color.YELLOW);
-        drawLine((int) (p0.x + v0.x), (int) (p0.y + v0.y), (int) (p0.x + v0.x + v1.x), (int) (p0.y + v0.y + v1.y));
-        drawLine((int) (p0.x + v0.x), (int) (p0.y + v0.y), (int) (p0.x + v0.x + v2.x), (int) (p0.y + v0.y + v2.y));
-
         //components for mapping from rotated frame to rev rotated-frame
         Vector vx = v1.divide(rWidth), vy = v2.divide(rHeight);
         //reverse mapping in subpixel steps
@@ -234,81 +179,65 @@ public abstract class EngineScreen extends Canvas {
     //geometry drawing
 
     public void fill() {
-        graphics.fillRect(0, 0, screenWidth, screenHeight);
-    }
-
-    public void setColor(Color color) {
-        graphics.setColor(color);
+        fillRect(0, 0, width, height);
     }
 
     public void drawPixel(int x, int y) {
-        graphics.fillRect(
-                (int) (pixelWidth * x), (int) (pixelHeight * y),
-                pixelWidthInt, pixelHeightInt);
+        fillRect((int) (pxWidth * x), (int) (pxHeight * y), pxWidthInt, pxHeightInt);
     }
 
     public void drawSizedString(int x, int y, int size, String string) {
-        float fontSize = pixelHeight * size / getFontMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 1)).getAscent();
+        float fontSize = pxHeight * size / getFontMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 1)).getAscent();
         graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, (int) fontSize));
         FontMetrics metrics = getFontMetrics(graphics.getFont());
         char[] chars = string.toCharArray();
-        float cx = (int) (x * pixelWidth);
-        int cy = (int) (y * pixelHeight + fontSize);
+        float cx = (int) (x * pxWidth);
+        int cy = (int) (y * pxHeight + fontSize);
         for (char c : chars) {
-            graphics.drawString(Character.toString(c), (int) (cx + (pixelWidth - metrics.charWidth(c)) / 3), (int) (cy - (pixelHeight - metrics.getAscent()) / 3));
-            cx += pixelWidth * size;
+            graphics.drawString(Character.toString(c), (int) (cx + (pxWidth - metrics.charWidth(c)) / 3), (int) (cy - (pxHeight - metrics.getAscent()) / 3));
+            cx += pxWidth * size;
         }
     }
 
-
     public void drawString(int x, int y, String string) {
-        float fontSize = pixelHeight / getFontMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 1)).getAscent();
+        float fontSize = pxHeight / getFontMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 1)).getAscent();
         graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, (int) fontSize));
         FontMetrics metrics = getFontMetrics(getFont());
         char[] chars = string.toCharArray();
-        float cx = (int) (x * pixelWidth);
-        int cy = (int) (y * pixelHeight + fontSize);
+        float cx = (int) (x * pxWidth);
+        int cy = (int) (y * pxHeight + fontSize);
         for (char c : chars) {
-            graphics.drawString(Character.toString(c), (int) (cx + (pixelWidth - metrics.charWidth(c)) / 3), (int) (cy - (pixelHeight - metrics.getAscent()) / 3));
-            cx += pixelWidth;
+            graphics.drawString(Character.toString(c), (int) (cx + (pxWidth - metrics.charWidth(c)) / 3), (int) (cy - (pxHeight - metrics.getAscent()) / 3));
+            cx += pxWidth;
         }
     }
 
     public void drawLine(int x1, int y1, int x2, int y2) {
-        //distances x and y
         int dx = x2 - x1, dy = y2 - y1;
         if (dx == 0 && dy == 0)
             drawPixel(x1, y1);
         else if (Math.abs(dx) > Math.abs(dy))
-            //if x distance is higher (each x gets 1 y pixel location)
             if (dx > 0)
-                //x1 is lower
                 for (int ix = x1; ix <= x2; ix++)
                     drawPixel(ix, Math.round(y1 + dy * (float) (ix - x1) / dx));
             else
-                //x2 is lower (or both x equal)
                 for (int ix = x2; ix <= x1; ix++)
                     drawPixel(ix, Math.round(y2 + dy * (float) (ix - x2) / dx));
         else
-            //if y distance is higher (each y gets 1 x pixel location)
             if (dy > 0)
-                //y1 is lower
                 for (int iy = y1; iy <= y2; iy++)
                     drawPixel(Math.round(x1 + dx * (float) (iy - y1) / dy), iy);
             else
-                //y2 is lower (or both y equal)
                 for (int iy = y2; iy <= y1; iy++)
                     drawPixel(Math.round(x2 + dx * (float) (iy - y2) / dy), iy);
     }
 
     public void drawRect(int x, int y, int width, int height) {
         int x2 = x + width, y2 = y + height;
-        //horizontal lines
         for (int ix = x; ix <= x2; ix++) {
             drawPixel(ix, y);
             drawPixel(ix, y2);
         }
-        //vertical lines
         for (int iy = y; iy <= y2; iy++) {
             drawPixel(x, iy);
             drawPixel(x2, iy);
@@ -316,7 +245,6 @@ public abstract class EngineScreen extends Canvas {
     }
 
     public void fillRect(int x1, int y1, int x2, int y2) {
-        //fill
         for (int ix = x1; ix <= x2; ix++)
             for (int iy = y1; iy <= y2; iy++)
                 drawPixel(ix, iy);
@@ -354,8 +282,8 @@ public abstract class EngineScreen extends Canvas {
     public void drawOval(int x, int y, int width, int height) {
 
         //like drawing a circle, but streched
-        float rx = (float) width / 2, ry = (float) height / 2; //radiusses
-        float rxSq = (float) Math.pow(rx, 2), rySq = (float) Math.pow(ry, 2); //radiusses squared
+        float rx = (float) width / 2, ry = (float) height / 2; //radia
+        float rxSq = (float) Math.pow(rx, 2), rySq = (float) Math.pow(ry, 2); //radia squared
         float cx = x + rx, cy = y + ry; //center
         float yStr = (float) height / width, xStr = (float) width / height; //stretch
 
@@ -382,8 +310,8 @@ public abstract class EngineScreen extends Canvas {
     }
 
     public void fillOval(int x, int y, int width, int height) {
-        float rx = (float) width / 2, ry = (float) height / 2; //radiusses
-        float rxSq = (float) Math.pow(rx, 2); //radiusses squared
+        float rx = (float) width / 2, ry = (float) height / 2; //radia
+        float rxSq = (float) Math.pow(rx, 2); //radia squared
         float cx = x + rx, cy = y + ry; //center
         float yStr = (float) height / width; //stretch
 
@@ -479,113 +407,6 @@ public abstract class EngineScreen extends Canvas {
             drawPixel(ix, y);
         }
     }
-
-    /*
-    //getters
-
-    public float getPixelWidth() {
-        return pixelWidth;
-    }
-
-    public float getPixelHeight() {
-        return pixelHeight;
-    }
-
-    public int getScreenPixelWidth() {
-        return screenPixelWidth;
-    }
-
-    public int getScreenPixelHeight() {
-        return screenPixelHeight;
-    }
-
-    public int getScreenWidth() {
-        return screenWidth;
-    }
-
-    public int getScreenHeight() {
-        return screenHeight;
-    }
-
-    public int getPixelWidthInt() {
-        return pixelWidthInt;
-    }
-
-    public int getPixelHeightInt() {
-        return pixelHeightInt;
-    }
-
-    public GameWindow getWindow() {
-        return window;
-    }
-    */
-
-    /*
-    //don´t use this
-    public void fillPolygon(Point[] points, Color color) {
-
-        ArrayList<Integer> xVals = new ArrayList<>();
-        ArrayList<Integer> yVals = new ArrayList<>();
-        for (Point point : points) {
-            xVals.add(point.x);
-            yVals.add(point.y);
-        }
-
-        int yMin = Collections.min(yVals);
-        int xMin = Collections.min(xVals);
-        int yMax = Collections.max(yVals);
-        int xMax = Collections.max(xVals);
-
-        for (int ix = xMin; ix <= xMax; ix++) {
-            FPoint v1p1 = new FPoint(avg(xVals), avg(yVals));
-            for (int iy = yMin; iy <= yMax; iy++) {
-                Point v1p2 = new Point(ix, iy);
-                boolean in = true;
-                for (int ip = 0; ip < points.length; ip++) {
-                    Point v2p1 = points[ip];
-                    Point v2p2;
-                    if (ip != points.length - 1) v2p2 = points[ip + 1];
-                    else v2p2 = points[0];
-                    drawLine(v2p1.x, v2p1.y, v2p2.x, v2p2.y, color);
-                    float
-                            a1 = v1p2.y - v1p1.y,
-                            b1 = v1p1.x - v1p2.x,
-                            c1 = (v1p2.x * v1p1.y) - (v1p1.x * v1p2.y),
-                            d1 = (a1 * v2p1.x) + (b1 * v2p1.y) + c1,
-                            d2 = (a1 * v2p2.x) + (b1 * v2p2.y) + c1;
-                    if (d1 > 0 && d2 > 0 || d1 < 0 && d2 < 0)
-                        continue;
-                    float
-                            a2 = v2p2.y - v2p1.y,
-                            b2 = v2p1.x - v2p2.x,
-                            c2 = (v2p2.x * v2p1.y) - (v2p1.x * v2p2.y);
-                    d1 = (a2 * v1p1.x) + (b2 * v1p1.y) + c2;
-                    d2 = (a2 * v1p2.x) + (b2 * v1p2.y) + c2;
-                    if (d1 > 0 && d2 > 0 || d1 < 0 && d2 < 0 || (a1 * b2) - (a2 * b1) == 0)
-                        continue;
-                    in = !in;
-                }
-                if (in) drawPixel(ix, iy, color);
-            }
-        }
-    }
-
-    private float avg(ArrayList<Integer> nums) {
-        float sum = 0;
-        for (Integer mark : nums)
-            sum += mark;
-        return sum / nums.size();
-    }
-
-    private static class FPoint extends Point {
-        float x, y;
-
-        public FPoint(float x, float y) {
-            this.x = x;
-            this.y = y;
-        }
-    }
-     */
-
 }
 
+ */

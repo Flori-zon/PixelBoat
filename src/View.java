@@ -1,188 +1,153 @@
+import org.jetbrains.annotations.NotNull;
+
 import java.awt.*;
-import java.io.File;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 
-abstract class View {
+class View {
 
-    final UIScreen screen;
-    final View host;
-    int id;
+    View host;
 
-    int x, y, height, width;
-    boolean visible;
-    boolean hover, hold;
-    ViewListener[] listeners;
-    View[] views;
+    // properties
+    String name;
+    boolean exists, visible;
+    Rectangle layout, box;
+    final List<View> views;
+    Dimension grid;
 
-    public View(UIScreen screen, View host, int x, int y, int width, int height) {
-        this.screen = screen;
-        this.host = host;
-        reposition(x, y);
-        resize(width, height);
-        this.visible = true;
-        this.listeners = new ViewListener[0];
-        this.views = new View[0];
+    // input
+    boolean hover, press, hold, release, click;
+
+    // output
+    BufferedImage frame;
+    Graphics2D graphics;
+    ViewListener listener;
+
+    View(@NotNull Data attrs) {
+        this.name = attrs.getStr("name", null);
+
+        this.exists = attrs.getBool("exists", true);
+        this.visible = attrs.getBool("visible", true);
+        this.layout = new Rectangle(
+                attrs.getInt("x", 0), attrs.getInt("y", 0),
+                attrs.getInt("width", 0), attrs.getInt("height", 0));
+        this.grid = new Dimension(
+                attrs.getInt("gx", 0), attrs.getInt("gy", 0));
+
+        this.views = new ArrayList<>();
+        this.frame = new BufferedImage(box.width, box.height, BufferedImage.TYPE_INT_ARGB);
+        this.graphics = (Graphics2D) frame.getGraphics();
     }
 
-    public void reposition(int x, int y) {
-        this.x = x;
-        this.y = y;
-    }
-
-    public void resize(int width, int height) {
-        this.width = width;
-        this.height = height;
-    }
-
-   /*
-    View[] allViews() {
-        ArrayList<View> allViews = new ArrayList<>(Collections.singletonList(this));
+    void tick() {
         for (View view : views)
-            allViews.addAll(Arrays.asList(view.allViews()));
-        return (View[]) allViews.toArray();
-    }
-    */
+            view.tick();
 
-    public int addView(int hostId, View addView) {
-        if (id == hostId) {
-            addView.id = viewNum();
-            ArrayList<View> viewsList = (ArrayList<View>) Arrays.asList(views);
-            viewsList.add(addView);
-            views = (View[]) viewsList.toArray();
-        } else if (views.length != 0)
-            for (View view : views)
-                if (view.addView(hostId, addView) != 0)
-                    break;
-        return addView.id;
-    }
-
-    public boolean removeView(int viewId) {
-        for (View view : views)
-            if (view.id == id) {
-                ArrayList<View> viewsList = (ArrayList<View>) Arrays.asList(view.host.views);
-                viewsList.remove(view);
-                view.views = (View[]) viewsList.toArray();
-                return true;
-            } else if (view.removeView(viewId)) {
-                return true;
-            }
-        return false;
-    }
-
-    public void addListener(ViewListener listener) {
-        ArrayList<ViewListener> listenerList = new ArrayList<>(Collections.singletonList(listener));
-        listenerList.add(listener);
-        listeners = (ViewListener[]) listenerList.toArray();
-    }
-
-    public boolean checkHover(Point m) {
-        boolean viewsHover = false;
-        for (View view : views)
-            viewsHover = view.checkHover(m) || viewsHover;
-        boolean thisHover = !viewsHover && visible && m != null && m.x >= x && m.x <= x + width && m.y >= y && m.y <= y + height;
-        if (thisHover != hover) {
-            hover = thisHover;
-            for (ViewListener listener : listeners)
-                listener.onHoverChange();
+        if (listener != null) {
+            if (hover) listener.onHover();
+            if (press) listener.onPress();
+            if (hold) listener.onHold();
+            if (release) listener.onRelease();
+            if (click) listener.onClick();
         }
-        return thisHover;
+
+        click = false;
+        release = false;
+        if (!hover) hold = false;
+        press = false;
+        hover = false;
     }
 
-    public boolean checkHold(boolean d) {
-        boolean viewsHold = false;
-        for (View view : views)
-            viewsHold = view.checkHold(d) || viewsHold;
-        boolean thisHold = !viewsHold && d && hover;
-        if (thisHold != hold) {
-            hold = thisHold;
-            for (ViewListener listener : listeners)
-                listener.onHoldChange();
-        }
-        return thisHold;
-    }
+    void draw() {
+        graphics.fillRect(0, 0, box.width, box.height);
 
-    public boolean checkClick() {
-        boolean viewsClick = false;
-        for (View view : views)
-            viewsClick = view.checkClick() || viewsClick;
-        boolean thisClick = !viewsClick && hover && hold;
-        if (thisClick)
-            for (ViewListener listener : listeners)
-                listener.onClick();
-        return thisClick;
-    }
-
-    public void draw() {
-        if (visible)
-            drawThis();
-        for (View view : views)
+        for (View view : views) {
             view.draw();
+            graphics.drawImage(view.frame, view.box.x, view.box.y, null);
+        }
+
     }
 
-    int viewNum() {
-        int viewNum = 1;
-        for (View view : views)
-            viewNum += view.viewNum();
-        return viewNum;
+    void add(View view) {
+        views.add(view);
+        view.host = this;
+        view.box();
     }
 
-    void drawThis() {
+    void remove(View view) {
+        if (views.remove(view))
+            view.host = null;
     }
+
+    void setListener(ViewListener newListener) {
+        listener = newListener;
+    }
+
+    void layout(Rectangle newLayout) {
+        layout = newLayout;
+        box();
+    }
+
+    private void box() {
+        if (host == null) return;
+        double mx = host.grid.width == 0 ? 1 : (double) host.box.width / host.grid.width,
+                my = host.grid.height == 0 ? 1 : (double) host.box.height / host.layout.height;
+        box = new Rectangle(
+                (int) (layout.x * mx),
+                (int) (layout.y * my),
+                (int) (layout.x == 0 ? host.box.width : layout.width * mx),
+                (int) (layout.y == 0 ? host.box.height : layout.height * my));
+    }
+
 }
 
 interface ViewListener {
-    void onHoverChange();
-
-    void onHoldChange();
-
+    void onHover();
+    void onPress();
+    void onHold();
+    void onRelease();
     void onClick();
 }
 
-abstract class FrameView extends View {
+/* TODO
+ * List
+ * Button Text/Image
+ * Label
+ * Text bar
+ */
+
+/*
+class FrameView extends View {
 
     Color
             bodyColor,
             frameColor;
 
-    public FrameView(
-            UIScreen screen, View host, int x, int y, int x2, int y2,
-            Color bgColor, Color frameColor
-    ) {
-        super(screen, host, x, y, x2, y2);
-        setBodyColor(bgColor);
-        setFrameColor(frameColor);
-    }
+    FrameView(Data attrs) {
+        super(attrs);
 
-    public void setBodyColor(Color bodyColor) {
-        this.bodyColor = bodyColor;
-    }
-
-    public void setFrameColor(Color frameColor) {
-        this.frameColor = frameColor;
+        bodyColor = new Color(attrs.getInt("bodyColor", Color.WHITE.getRGB()));
+        frameColor = new Color(attrs.getInt("bodyColor", Color.BLACK.getRGB()));
     }
 
     @Override
-    void drawThis() {
-        screen.setColor(Color.GRAY);
+    void tick() {
+        super.tick();
+        screen.setColor(bodyColor);
         screen.fillRect(x, y, width, height);
-        screen.setColor(Color.DARK_GRAY);
+        screen.setColor(frameColor);
         screen.drawRect(x, y, width, height);
     }
 }
 
-class ImageView extends FrameView {
+class ImageView extends DrawableView {
 
     File imgFile;
-    EngineScreen.Image image;
+    PixelGraphics.Image image;
 
-    public ImageView(
-            UIScreen screen, View host, int x1, int y1, int x2, int y2,
-            Color bgColor, Color frameColor,
-            File imgFile
-    ) {
-        super(screen, host, x1, y1, x2, y2, bgColor, frameColor);
+    public ImageView(UIScreen screen, int id, View host) {
+        super(screen, id, host);
         setImage(imgFile);
     }
 
@@ -192,14 +157,13 @@ class ImageView extends FrameView {
     }
 
     @Override
-    public void resize(int x, int y) {
-        super.reposition(x, y);
+    public void setPosition(int x, int y) {
+        super.setPosition(x, y);
         if (imgFile != null) setImage(imgFile);
     }
 
     @Override
-    void drawThis() {
-        super.drawThis();
+    void draw() {
         screen.drawImage(image, x + 2, y + 2);
     }
 
@@ -210,12 +174,8 @@ class TextView extends FrameView {
     String text;
     int textSize;
 
-    public TextView(
-            UIScreen screen, View host, int x, int y, int x2, int y2,
-            Color bgColor, Color frameColor,
-            String text
-    ) {
-        super(screen, host, x, y, x2, y2, bgColor, frameColor);
+    public TextView(UIScreen screen, int id, View host) {
+        super(screen, id, host);
         setText(text);
     }
 
@@ -224,15 +184,22 @@ class TextView extends FrameView {
     }
 
     @Override
-    public void resize(int x, int y) {
-        super.reposition(x, y);
+    public void setPosition(int x, int y) {
+        super.setPosition(x, y);
         textSize = height - 4;
     }
 
     @Override
-    void drawThis() {
-        super.drawThis();
+    void draw() {
+        super.draw();
         screen.drawSizedString(x + 2, y + 2, textSize, text);
     }
 
-}
+} */
+
+
+
+
+
+
+
