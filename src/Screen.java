@@ -4,7 +4,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferStrategy;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 abstract class Screen implements MouseListener, MouseMotionListener, KeyListener, ComponentListener {
@@ -13,7 +12,7 @@ abstract class Screen implements MouseListener, MouseMotionListener, KeyListener
     Dimension size;
 
     // input
-    Input input, tInput;
+    Input input, tickInput;
 
     // output
     Color background;
@@ -35,7 +34,7 @@ abstract class Screen implements MouseListener, MouseMotionListener, KeyListener
         canvas.addComponentListener(this);
     }
 
-    static class Input {
+    public static class Input {
         Point mouse;
         List<Integer>
                 mbPressed, mbReleased,
@@ -50,7 +49,7 @@ abstract class Screen implements MouseListener, MouseMotionListener, KeyListener
     }
 
     void tick() {
-        tInput = input;
+        tickInput = input;
 
         tickScreen();
 
@@ -72,6 +71,16 @@ abstract class Screen implements MouseListener, MouseMotionListener, KeyListener
         g.dispose();
         bs.show();
     }
+
+    @NotNull
+    abstract String getName();
+
+    @NotNull
+    abstract Color getBackground();
+
+    abstract void tickScreen();
+
+    abstract void drawScreen();
 
     public void mouseMoved(MouseEvent e) {
         input.mouse = canvas.getMousePosition();
@@ -97,6 +106,8 @@ abstract class Screen implements MouseListener, MouseMotionListener, KeyListener
         size = canvas.getSize();
     }
 
+    // unused
+
     public void mouseClicked(MouseEvent e) {
     }
 
@@ -121,89 +132,4 @@ abstract class Screen implements MouseListener, MouseMotionListener, KeyListener
     public void componentHidden(ComponentEvent e) {
     }
 
-    @NotNull
-    abstract String getName();
-
-    @NotNull
-    abstract Color getBackground();
-
-    abstract void tickScreen();
-
-    abstract void drawScreen();
-}
-
-abstract class UIScreen extends Screen {
-
-    View root;
-
-    public UIScreen(Window window) {
-        super(window);
-
-        Data data = new Data();
-        data.setInt("width", size.width);
-        data.setInt("height", size.height);
-        root = new View(data) {
-            @Override
-            void tickView() {
-            }
-
-            @Override
-            void drawView() {
-            }
-        };
-
-        window.addMouseListener(this);
-        window.addMouseMotionListener(this);
-    }
-
-    View getView(@NotNull String name) {
-        List<View> search = new ArrayList<>(Collections.singletonList(root));
-        while (search.size() != 0) {
-            View v = search.get(0);
-            if (name.equals(v.name)) return v;
-            search.addAll(v.views);
-        }
-        return null;
-    }
-
-    @Override
-    void tickScreen() {
-
-        boolean mouseDown = tInput.mbPressed.size() > 0,
-                mouseUp = tInput.mbReleased.size() > 0;
-
-        View selected = null;
-        if (tInput.mouse != null) {
-            List<View> check = new ArrayList<>(Collections.singletonList(root));
-            while (check.size() > 0) {
-                if (check.get(0).box.contains(tInput.mouse)) {
-                    check = new ArrayList<>(check.get(0).views);
-                    selected = check.get(0);
-                } else check.remove(0);
-            }
-        }
-
-        if (selected != null) {
-            selected.hover = true;
-            selected.press = mouseDown;
-            selected.release = mouseUp;
-            selected.click = selected.hold && mouseUp;
-        }
-
-        root.tick();
-
-        tickUIScreen();
-    }
-
-    @Override
-    void drawScreen() {
-        root.draw();
-        g.drawImage(root.frame, 0, 0, null);
-
-        drawUIScreen();
-    }
-
-    abstract void tickUIScreen();
-
-    abstract void drawUIScreen();
 }

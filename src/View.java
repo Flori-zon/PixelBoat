@@ -1,48 +1,49 @@
-import org.jetbrains.annotations.NotNull;
-
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
-class View {
+abstract class View {
 
-    View host;
+    private String name;
+    //private View host;
+    private final List<View> views;
 
-    // properties
-    String name;
-    boolean exists, visible;
-    Rectangle layout, box;
-    final List<View> views;
-    Dimension grid;
+    private boolean exists, visible;
+    private Rectangle layout, abs;
+    private final BufferedImage frame;
+    private final Graphics2D graphics;
 
-    // input
-    boolean hover, press, hold, release, click;
+    private final List<Integer> holding;
+    private ViewListener listener;
 
-    // output
-    BufferedImage frame;
-    Graphics2D graphics;
-    ViewListener listener;
+    View(Data attrs, List<View> children) {
 
-    View(@NotNull Data attrs) {
+        this.views = new ArrayList<>(children);
+
         this.name = attrs.getStr("name", null);
-
         this.exists = attrs.getBool("exists", true);
         this.visible = attrs.getBool("visible", true);
         this.layout = new Rectangle(
                 attrs.getInt("x", 0), attrs.getInt("y", 0),
                 attrs.getInt("width", 0), attrs.getInt("height", 0));
-        this.grid = new Dimension(
-                attrs.getInt("gx", 0), attrs.getInt("gy", 0));
 
-        this.views = new ArrayList<>();
-        this.frame = new BufferedImage(box.width, box.height, BufferedImage.TYPE_INT_ARGB);
+        this.frame = new BufferedImage(abs.width, abs.height, BufferedImage.TYPE_INT_ARGB);
         this.graphics = (Graphics2D) frame.getGraphics();
+
+        this.holding = new ArrayList<>();
     }
 
-    void tick() {
+    private void layout(Rectangle layout) {
+        abs = new Rectangle(abs.x + layout.x, abs.y + layout.y, layout.width, layout.height);
+    }
+
+    void tick(Point mouse, List<Integer> mb) {
+
         for (View view : views)
-            view.tick();
+            view.tick(new Point(1, 1), mb);
+
+        if (abs.contains(input.mouse)) ;
 
         if (listener != null) {
             if (hover) listener.onHover();
@@ -52,62 +53,47 @@ class View {
             if (click) listener.onClick();
         }
 
-        click = false;
-        release = false;
-        if (!hover) hold = false;
-        press = false;
-        hover = false;
     }
 
-    void draw() {
-        graphics.fillRect(0, 0, box.width, box.height);
+    BufferedImage draw() {
 
-        for (View view : views) {
-            view.draw();
-            graphics.drawImage(view.frame, view.box.x, view.box.y, null);
-        }
+        graphics.fillRect(0, 0, abs.width, abs.height);
 
+        for (View view : views)
+            graphics.drawImage(view.draw(), view.abs.x, view.abs.y, null);
+
+        if (visible)
+            drawView();
+
+        return frame;
     }
 
-    void add(View view) {
-        views.add(view);
-        view.host = this;
-        view.box();
+    abstract void drawView();
+
+    public void setListener(ViewListener viewListener) {
+        this.listener = viewListener;
     }
 
-    void remove(View view) {
-        if (views.remove(view))
-            view.host = null;
+    public String getName() {
+        return name;
     }
 
-    void setListener(ViewListener newListener) {
-        listener = newListener;
-    }
-
-    void layout(Rectangle newLayout) {
-        layout = newLayout;
-        box();
-    }
-
-    private void box() {
-        if (host == null) return;
-        double mx = host.grid.width == 0 ? 1 : (double) host.box.width / host.grid.width,
-                my = host.grid.height == 0 ? 1 : (double) host.box.height / host.layout.height;
-        box = new Rectangle(
-                (int) (layout.x * mx),
-                (int) (layout.y * my),
-                (int) (layout.x == 0 ? host.box.width : layout.width * mx),
-                (int) (layout.y == 0 ? host.box.height : layout.height * my));
+    public List<View> getViews() {
+        return views;
     }
 
 }
 
 interface ViewListener {
     void onHover();
-    void onPress();
-    void onHold();
-    void onRelease();
-    void onClick();
+
+    void onPress(int mb);
+
+    void onHold(int mb);
+
+    void onRelease(int mb);
+
+    void onClick(int mb);
 }
 
 /* TODO
@@ -116,90 +102,3 @@ interface ViewListener {
  * Label
  * Text bar
  */
-
-/*
-class FrameView extends View {
-
-    Color
-            bodyColor,
-            frameColor;
-
-    FrameView(Data attrs) {
-        super(attrs);
-
-        bodyColor = new Color(attrs.getInt("bodyColor", Color.WHITE.getRGB()));
-        frameColor = new Color(attrs.getInt("bodyColor", Color.BLACK.getRGB()));
-    }
-
-    @Override
-    void tick() {
-        super.tick();
-        screen.setColor(bodyColor);
-        screen.fillRect(x, y, width, height);
-        screen.setColor(frameColor);
-        screen.drawRect(x, y, width, height);
-    }
-}
-
-class ImageView extends DrawableView {
-
-    File imgFile;
-    PixelGraphics.Image image;
-
-    public ImageView(UIScreen screen, int id, View host) {
-        super(screen, id, host);
-        setImage(imgFile);
-    }
-
-    public void setImage(File imgFile) {
-        this.imgFile = imgFile;
-        image = screen.resizeImage(screen.readImage(imgFile), width - 4, height - 4);
-    }
-
-    @Override
-    public void setPosition(int x, int y) {
-        super.setPosition(x, y);
-        if (imgFile != null) setImage(imgFile);
-    }
-
-    @Override
-    void draw() {
-        screen.drawImage(image, x + 2, y + 2);
-    }
-
-}
-
-class TextView extends FrameView {
-
-    String text;
-    int textSize;
-
-    public TextView(UIScreen screen, int id, View host) {
-        super(screen, id, host);
-        setText(text);
-    }
-
-    public void setText(String text) {
-        this.text = text;
-    }
-
-    @Override
-    public void setPosition(int x, int y) {
-        super.setPosition(x, y);
-        textSize = height - 4;
-    }
-
-    @Override
-    void draw() {
-        super.draw();
-        screen.drawSizedString(x + 2, y + 2, textSize, text);
-    }
-
-} */
-
-
-
-
-
-
-
